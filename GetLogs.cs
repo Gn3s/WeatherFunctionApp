@@ -10,7 +10,6 @@ namespace WeatherFunctionApp
     using Microsoft.AspNetCore.Http;
     using Microsoft.Extensions.Logging;
     using Microsoft.Azure.Cosmos.Table;
-    using static WeatherFunctionApp.FetchWeatherData;
     using WeatherFunctionApp.Entities;
 
     public static class GetLogs

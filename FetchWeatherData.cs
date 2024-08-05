@@ -7,9 +7,7 @@ namespace WeatherFunctionApp
     using Microsoft.Extensions.Logging;
     using Microsoft.Azure.Cosmos.Table;
     using Azure.Storage.Blobs;
-    using System.Text.Json;
     using WeatherFunctionApp.Entities;
-    using Google.Protobuf.WellKnownTypes;
 
     public static class FetchWeatherData
     {
@@ -33,21 +31,7 @@ namespace WeatherFunctionApp
                 var blobClient = containerClient.GetBlobClient($"{timestamp:yyyyMMddHHmmss}.json");
                 await blobClient.UploadAsync(new BinaryData(response), true);
 
-                // Store log in Table Storage
-                var tableClient = CloudStorageAccount.Parse(storageConnectionString).CreateCloudTableClient(new TableClientConfiguration());
-                var table = tableClient.GetTableReference("WeatherLogs");
-                await table.CreateIfNotExistsAsync();
-
-                var logEntry = new WeatherLogEntity
-                {
-                    PartitionKey = "WeatherLog",
-                    RowKey = timestamp.ToString("yyyyMMddHHmmss"),
-                    Timestamp = timestamp,
-                    Status = "Success",
-                    BlobUri = blobClient.Uri.ToString()
-                };
-                var insertOperation = TableOperation.Insert(logEntry);
-                await table.ExecuteAsync(insertOperation);
+                await StoreLogInTable(timestamp, "Success", blobClient.Uri.ToString(), null);
 
                 log.LogInformation($"Weather data fetched and stored successfully at {timestamp}");
             }
@@ -55,24 +39,11 @@ namespace WeatherFunctionApp
             {
                 log.LogError($"Error fetching weather data: {ex.Message}");
 
-                var tableClient = CloudStorageAccount.Parse(storageConnectionString).CreateCloudTableClient(new TableClientConfiguration());
-                var table = tableClient.GetTableReference("WeatherLogs");
-                await table.CreateIfNotExistsAsync();
-
-                var logEntry = new WeatherLogEntity
-                {
-                    PartitionKey = "WeatherLog",
-                    RowKey = timestamp.ToString("yyyyMMddHHmmss"),
-                    Timestamp = timestamp,
-                    Status = "Failure",
-                    ErrorMessage = ex.Message
-                };
-                var insertOperation = TableOperation.Insert(logEntry);
-                await table.ExecuteAsync(insertOperation);
+                await StoreLogInTable(timestamp, "Failure", null, ex.Message);
             }
         }
 
-        private static async Task StoreLogInTable(DateTime timestamp)
+        private static async Task StoreLogInTable(DateTime timestamp, string status, string blobUri = null, string errorMessage = null)
         {
             var tableClient = CloudStorageAccount.Parse(storageConnectionString).CreateCloudTableClient(new TableClientConfiguration());
             var table = tableClient.GetTableReference("WeatherLogs");
@@ -83,8 +54,9 @@ namespace WeatherFunctionApp
                 PartitionKey = "WeatherLog",
                 RowKey = timestamp.ToString("yyyyMMddHHmmss"),
                 Timestamp = timestamp,
-                Status = "Failure",
-                ErrorMessage = ex.Message
+                Status = status,
+                BlobUri = blobUri,
+                ErrorMessage = errorMessage
             };
             var insertOperation = TableOperation.Insert(logEntry);
             await table.ExecuteAsync(insertOperation);
